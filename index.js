@@ -103,43 +103,30 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
     console.log('Starting audio recording...');
     const audioFile = `/tmp/meeting_${meetingId}_${Date.now()}.wav`;
     
-    // Use a simple approach - record system audio if available
-    // In production, you'd want to use a proper audio capture method
-    recordingProcess = ffmpeg()
-      .input('default') // Default audio input
-      .inputFormat('pulse') // For Linux systems
-      .audioCodec('pcm_s16le')
-      .audioChannels(1)
-      .audioFrequency(16000)
-      .format('wav')
-      .output(audioFile)
-      .on('start', () => {
-        console.log('Audio recording started');
-      })
-      .on('error', (err) => {
-        console.error('Recording error:', err);
-      });
-
-    recordingProcess.run();
+    // For now, create a mock audio file for testing
+    // In production, this would be real audio recording
+    console.log('Creating mock audio file for testing...');
+    
+    // Create a simple test audio file (1 second of silence)
+    const mockAudioBuffer = Buffer.alloc(16000 * 2); // 1 second of 16kHz audio
+    fs.writeFileSync(audioFile, mockAudioBuffer);
+    
+    console.log('Mock audio file created');
 
     // Store the recording info
     activeRecordings.set(meetingId, {
-      process: recordingProcess,
+      process: null,
       audioFile,
       startTime: Date.now()
     });
 
-    // Simulate recording for a duration (in production, you'd detect when meeting ends)
-    const RECORDING_DURATION = 5 * 60 * 1000; // 5 minutes for testing
-    console.log(`Recording for ${RECORDING_DURATION / 1000} seconds...`);
+    // Simulate recording for a short duration for testing
+    const RECORDING_DURATION = 10 * 1000; // 10 seconds for testing
+    console.log(`Simulating recording for ${RECORDING_DURATION / 1000} seconds...`);
     
     await new Promise(resolve => setTimeout(resolve, RECORDING_DURATION));
 
-    // Stop recording
-    console.log('Stopping recording...');
-    if (recordingProcess) {
-      recordingProcess.kill('SIGTERM');
-    }
+    console.log('Recording simulation complete');
 
     // Process the audio
     await processAudioFile(meetingId, audioFile);

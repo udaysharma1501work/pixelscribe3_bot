@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: pixelscribe-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BOT_EMAIL
+        sync: false
+      - key: BOT_PASSWORD
+        sync: false
+      - key: API_BASE_URL
+        value: https://pixelscribe3.vercel.app
+      - key: PORT
+        value: 3000
