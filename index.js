@@ -42,7 +42,7 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
   try {
     // Launch browser with proper settings for Google Meet
     browser = await chromium.launch({
-      headless: false, // Need to see the browser for debugging
+      headless: process.env.NODE_ENV === 'production', // Headless in production
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -55,7 +55,10 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
         '--use-fake-device-for-media-stream',
         '--allow-running-insecure-content',
         '--disable-web-security',
-        '--disable-features=VizDisplayCompositor'
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding'
       ]
     });
 
@@ -316,6 +319,8 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Bot server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Playwright browsers path: ${process.env.PLAYWRIGHT_BROWSERS_PATH || 'default'}`);
 });
 
 module.exports = app;

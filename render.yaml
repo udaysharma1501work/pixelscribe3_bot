@@ -3,7 +3,7 @@ services:
     name: pixelscribe-bot
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm ci && npx playwright install chromium
     startCommand: npm start
     envVars:
       - key: BOT_EMAIL
@@ -14,3 +14,7 @@ services:
         value: https://pixelscribe3.vercel.app
       - key: PORT
         value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/project/src/node_modules/playwright/.local-browsers
