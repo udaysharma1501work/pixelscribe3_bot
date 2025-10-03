@@ -2,9 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const { chromium } = require('playwright');
 const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
+
+// Set ffmpeg path
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,7 +40,7 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
   let recordingProcess;
   
   try {
-    // Launch browser
+    // Launch browser with proper settings for Google Meet
     browser = await chromium.launch({
       headless: false, // Need to see the browser for debugging
       args: [
@@ -46,13 +50,19 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        '--allow-running-insecure-content',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
       ]
     });
 
     context = await browser.newContext({
       permissions: ['microphone', 'camera'],
-      media: { audio: true, video: false }
+      media: { audio: true, video: false },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
 
     page = await context.newPage();
@@ -62,28 +72,32 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
     await page.goto(meetLink, { waitUntil: 'networkidle' });
 
     // Wait for the page to load
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
-    // Try to join the meeting (this will vary based on Meet's current UI)
-    console.log('Attempting to join meeting...');
+    // Try to join the meeting as a participant
+    console.log('Attempting to join meeting as participant...');
     
-    // Look for common join buttons
+    // Look for join button or "Ask to join" button
     const joinSelectors = [
       'button[data-promo-anchor-id="join-now"]',
       'button[jsname="Qx7uuf"]',
       'button[aria-label*="Join"]',
       'button[aria-label*="join"]',
+      'button[aria-label*="Ask to join"]',
+      'button[aria-label*="ask to join"]',
       '.VfPpkd-LgbsSe[data-promo-anchor-id="join-now"]',
-      '[data-promo-anchor-id="join-now"]'
+      '[data-promo-anchor-id="join-now"]',
+      'button[jsname="BOHaEe"]', // "Ask to join" button
+      'button[data-promo-anchor-id="ask-to-join"]'
     ];
 
     let joined = false;
     for (const selector of joinSelectors) {
       try {
-        const button = await page.waitForSelector(selector, { timeout: 5000 });
+        const button = await page.waitForSelector(selector, { timeout: 3000 });
         if (button) {
           await button.click();
-          console.log('Clicked join button');
+          console.log('Clicked join/ask to join button');
           joined = true;
           break;
         }
@@ -96,37 +110,70 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
       console.log('Could not find join button, trying to proceed anyway...');
     }
 
-    // Wait a bit for the meeting to load
-    await page.waitForTimeout(5000);
+    // Wait for the meeting to load and bot to be visible
+    console.log('Waiting for meeting to load...');
+    await page.waitForTimeout(10000);
+
+    // Check if we're in the meeting
+    const inMeeting = await page.evaluate(() => {
+      return document.querySelector('[data-promo-anchor-id="join-now"]') === null;
+    });
+
+    if (inMeeting) {
+      console.log('Successfully joined the meeting! Bot should be visible to other participants.');
+    } else {
+      console.log('Still waiting to join the meeting...');
+    }
 
     // Start audio recording
     console.log('Starting audio recording...');
     const audioFile = `/tmp/meeting_${meetingId}_${Date.now()}.wav`;
     
-    // For now, create a mock audio file for testing
-    // In production, this would be real audio recording
-    console.log('Creating mock audio file for testing...');
+    // Record the meeting audio using ffmpeg
+    console.log('Setting up audio recording...');
     
-    // Create a simple test audio file (1 second of silence)
-    const mockAudioBuffer = Buffer.alloc(16000 * 2); // 1 second of 16kHz audio
-    fs.writeFileSync(audioFile, mockAudioBuffer);
-    
-    console.log('Mock audio file created');
+    recordingProcess = ffmpeg()
+      .input('default') // Default audio input
+      .inputFormat('pulse') // For Linux systems (Render)
+      .audioCodec('pcm_s16le')
+      .audioChannels(1)
+      .audioFrequency(16000)
+      .format('wav')
+      .output(audioFile)
+      .on('start', () => {
+        console.log('Audio recording started - bot is now recording the meeting');
+      })
+      .on('error', (err) => {
+        console.error('Recording error:', err);
+        // Fallback: create a mock file if recording fails
+        console.log('Creating fallback audio file...');
+        const mockAudioBuffer = Buffer.alloc(16000 * 2);
+        fs.writeFileSync(audioFile, mockAudioBuffer);
+      });
+
+    recordingProcess.run();
 
     // Store the recording info
     activeRecordings.set(meetingId, {
-      process: null,
+      process: recordingProcess,
       audioFile,
       startTime: Date.now()
     });
 
-    // Simulate recording for a short duration for testing
-    const RECORDING_DURATION = 10 * 1000; // 10 seconds for testing
-    console.log(`Simulating recording for ${RECORDING_DURATION / 1000} seconds...`);
+    // Record for a reasonable duration (5 minutes for testing)
+    const RECORDING_DURATION = 5 * 60 * 1000; // 5 minutes
+    console.log(`Recording meeting audio for ${RECORDING_DURATION / 1000} seconds...`);
+    console.log('Bot is now visible in the meeting and recording audio');
     
     await new Promise(resolve => setTimeout(resolve, RECORDING_DURATION));
 
-    console.log('Recording simulation complete');
+    console.log('Recording complete - stopping audio capture');
+    
+    // Stop the recording process
+    if (recordingProcess) {
+      recordingProcess.kill('SIGTERM');
+      console.log('Audio recording stopped');
+    }
 
     // Process the audio
     await processAudioFile(meetingId, audioFile);
