@@ -47,13 +47,8 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled',
         '--use-fake-ui-for-media-stream',
-        '--use-fake-device-for-media-stream',
-        '--allow-running-insecure-content',
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--disable-background-timer-throttling',
@@ -65,7 +60,8 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
     context = await browser.newContext({
       permissions: ['microphone', 'camera'],
       media: { audio: true, video: false },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 720 }
     });
 
     page = await context.newPage();
@@ -76,56 +72,100 @@ async function joinMeetingAndRecord(meetingId, meetLink) {
 
     // Wait for the page to load
     await page.waitForTimeout(5000);
-
-    // Try to join the meeting as a participant
-    console.log('Attempting to join meeting as participant...');
     
-    // Look for join button or "Ask to join" button
-    const joinSelectors = [
-      'button[data-promo-anchor-id="join-now"]',
-      'button[jsname="Qx7uuf"]',
-      'button[aria-label*="Join"]',
-      'button[aria-label*="join"]',
-      'button[aria-label*="Ask to join"]',
-      'button[aria-label*="ask to join"]',
-      '.VfPpkd-LgbsSe[data-promo-anchor-id="join-now"]',
-      '[data-promo-anchor-id="join-now"]',
-      'button[jsname="BOHaEe"]', // "Ask to join" button
-      'button[data-promo-anchor-id="ask-to-join"]'
-    ];
+    // Take a screenshot for debugging
+    try {
+      await page.screenshot({ path: `/tmp/meeting_${meetingId}_before_join.png` });
+      console.log('Screenshot saved for debugging');
+    } catch (e) {
+      console.log('Could not save screenshot:', e.message);
+    }
 
-    let joined = false;
-    for (const selector of joinSelectors) {
-      try {
-        const button = await page.waitForSelector(selector, { timeout: 3000 });
-        if (button) {
-          await button.click();
-          console.log('Clicked join/ask to join button');
-          joined = true;
-          break;
+    // Try to join the meeting using the simpler approach
+    console.log('Attempting to join meeting as guest...');
+    
+    try {
+      // Fill the "Your name" input field
+      const nameInput = await page.waitForSelector('input[aria-label="Your name"]', { timeout: 10000 });
+      if (nameInput) {
+        await nameInput.fill('Meeting Bot');
+        console.log('Entered name: Meeting Bot');
+      }
+    } catch (error) {
+      console.log('⚠️ Could not find name input, trying alternative selectors...');
+      
+      // Try alternative selectors for name input
+      const alternativeSelectors = [
+        'input[placeholder*="name"]',
+        'input[placeholder*="Name"]',
+        'input[type="text"]',
+        'input[aria-label*="name"]',
+        'input[aria-label*="Name"]'
+      ];
+      
+      let nameEntered = false;
+      for (const selector of alternativeSelectors) {
+        try {
+          const input = await page.waitForSelector(selector, { timeout: 2000 });
+          if (input) {
+            await input.fill('Meeting Bot');
+            console.log(`Entered name using selector: ${selector}`);
+            nameEntered = true;
+            break;
+          }
+        } catch (e) {
+          // Continue to next selector
         }
-      } catch (e) {
-        // Continue to next selector
+      }
+      
+      if (!nameEntered) {
+        console.log('⚠️ Could not find any name input field');
       }
     }
 
-    if (!joined) {
-      console.log('Could not find join button, trying to proceed anyway...');
-    }
+    // Press Enter to join the meeting
+    console.log('Pressing Enter to join the meeting...');
+    await page.keyboard.press('Enter');
 
-    // Wait for the meeting to load and bot to be visible
+    // Wait for the meeting to load
     console.log('Waiting for meeting to load...');
     await page.waitForTimeout(10000);
 
-    // Check if we're in the meeting
+    // Check if we successfully joined
     const inMeeting = await page.evaluate(() => {
-      return document.querySelector('[data-promo-anchor-id="join-now"]') === null;
+      // Look for indicators that we're in the meeting
+      const meetingIndicators = [
+        document.querySelector('[data-promo-anchor-id="join-now"]') === null,
+        document.querySelector('[jsname="BOHaEe"]') === null, // Ask to join button
+        document.querySelector('button[aria-label*="Join"]') === null,
+        document.querySelector('.VfPpkd-LgbsSe[data-promo-anchor-id="join-now"]') === null
+      ];
+      return meetingIndicators.some(indicator => indicator);
     });
 
     if (inMeeting) {
       console.log('Successfully joined the meeting! Bot should be visible to other participants.');
     } else {
       console.log('Still waiting to join the meeting...');
+      // Try clicking any remaining join buttons
+      try {
+        const joinButton = await page.waitForSelector('button[aria-label*="Join"], button[aria-label*="join"], button[jsname="BOHaEe"]', { timeout: 5000 });
+        if (joinButton) {
+          await joinButton.click();
+          console.log('Clicked additional join button');
+          await page.waitForTimeout(5000);
+        }
+      } catch (e) {
+        console.log('No additional join buttons found');
+      }
+    }
+    
+    // Take another screenshot after joining attempt
+    try {
+      await page.screenshot({ path: `/tmp/meeting_${meetingId}_after_join.png` });
+      console.log('Post-join screenshot saved for debugging');
+    } catch (e) {
+      console.log('Could not save post-join screenshot:', e.message);
     }
 
     // Start audio recording
