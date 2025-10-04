@@ -4,9 +4,9 @@
   "description": "Headless bot for joining Google Meet and recording audio",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node start.js",
     "dev": "node index.js",
-    "postinstall": "npx playwright install chromium"
+    "postinstall": "npx playwright install --with-deps chromium"
   },
   "dependencies": {
     "playwright": "^1.40.0",

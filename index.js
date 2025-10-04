@@ -7,6 +7,23 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+// Check Playwright installation
+console.log('Checking Playwright installation...');
+try {
+  const { execSync } = require('child_process');
+  execSync('npx playwright --version', { stdio: 'pipe' });
+  console.log('Playwright is available');
+} catch (error) {
+  console.error('Playwright not properly installed:', error.message);
+  console.log('Attempting to install Playwright browsers...');
+  try {
+    execSync('npx playwright install chromium', { stdio: 'inherit' });
+    console.log('Playwright browsers installed successfully');
+  } catch (installError) {
+    console.error('Failed to install Playwright browsers:', installError.message);
+  }
+}
+
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegPath);
 
