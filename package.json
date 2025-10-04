@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node start.js",
     "dev": "node index.js",
-    "postinstall": "npx playwright install --with-deps chromium"
+    "postinstall": "npx playwright install chromium"
   },
   "dependencies": {
     "playwright": "^1.40.0",
@@ -17,6 +17,6 @@
     "@ffmpeg-installer/ffmpeg": "^1.1.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }
