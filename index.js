@@ -7,16 +7,7 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// Install Playwright browsers if needed (non-blocking)
-setImmediate(async () => {
-  try {
-    const { execSync } = require('child_process');
-    execSync('npx playwright install chromium', { stdio: 'pipe' });
-    console.log('Playwright browsers ready');
-  } catch (error) {
-    console.log('Playwright installation in progress or already installed');
-  }
-});
+// Playwright will be installed during build phase
 
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegPath);
