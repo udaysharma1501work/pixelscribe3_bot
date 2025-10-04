@@ -7,22 +7,7 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// Check Playwright installation
-console.log('Checking Playwright installation...');
-try {
-  const { execSync } = require('child_process');
-  execSync('npx playwright --version', { stdio: 'pipe' });
-  console.log('Playwright is available');
-} catch (error) {
-  console.error('Playwright not properly installed:', error.message);
-  console.log('Attempting to install Playwright browsers...');
-  try {
-    execSync('npx playwright install chromium', { stdio: 'inherit' });
-    console.log('Playwright browsers installed successfully');
-  } catch (installError) {
-    console.error('Failed to install Playwright browsers:', installError.message);
-  }
-}
+// Playwright installation is handled in start.js
 
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -372,12 +357,15 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Bot server running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Playwright browsers path: ${process.env.PLAYWRIGHT_BROWSERS_PATH || 'default'}`);
-});
+// Only start server if this file is run directly
+if (require.main === module) {
+  // Start server
+  app.listen(PORT, () => {
+    console.log(`Bot server running on port ${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/health`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Playwright browsers path: ${process.env.PLAYWRIGHT_BROWSERS_PATH || 'default'}`);
+  });
+}
 
 module.exports = app;
